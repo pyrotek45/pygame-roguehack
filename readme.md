@@ -1,5 +1,7 @@
 # roguehack ( a nethack like game using pygame )
 
+![alt text](/screenshot.png)
+
 so far there are floors, and mobs.
 
 basic actions like bumping into a mob ( or a mob bumping into you ) will cause an attack.

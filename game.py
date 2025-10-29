@@ -82,6 +82,14 @@ class World:
             symbol = (entity.symbol, entity.color)
             entity_map[pos] = symbol
 
+        # stores entity's location to get drawn
+        item_map = {}
+        for item in self.map.items:
+            if not item.used:
+                pos = (item.y, item.x)
+                symbol = (item.symbol, item.color)
+                item_map[pos] = symbol
+
         height = len(self.map.grid)
         width = len(self.map.grid[0])
 
@@ -111,6 +119,9 @@ class World:
                     else:
                         text = font.render(str(entity_map[(y, x)][0]), True, entity_map[(y,x)][1])
                         screen.blit(text, (x * font_size, y * font_size + top_bar_size_offset))
+                elif (y, x) in item_map:
+                    text = font.render(str(item_map[(y, x)][0]), True, item_map[(y,x)][1])
+                    screen.blit(text, (x * font_size, y * font_size + top_bar_size_offset))
                 else:
                     if ch == "#":
                         if wall_visible(y, x):

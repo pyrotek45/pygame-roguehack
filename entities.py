@@ -39,7 +39,7 @@ class Ai:
     def __init__(self, owner):
         self.owner = owner
 
-    def take_turn(self, world):
+    def take_turn(self, floor):
         pass
 
 

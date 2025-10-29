@@ -1,5 +1,28 @@
 import random
 
+class Item:
+    def __init__(self, x, y, name, symbol, color):
+        self.x = x
+        self.y = y
+        self.symbol = symbol
+        self.name = name
+        self.color = color
+        self.used = False
+
+    def use(self, floor):
+        pass
+
+# gets used as soon as stepped on
+class Potion(Item):
+    def use(self, entity, world):
+        entity.health += 20
+        if entity.health > entity.max_health:
+            entity.health = entity.max_health
+
+        self.used = True
+        world.log_message(f"{entity.name} gained 20 health from potion")
+
+               
 
 class Floor:
     def __init__(self, world, grid_w, grid_h):
@@ -45,11 +68,16 @@ class Floor:
         grid[stair_up_y][stair_up_x] = "<"
         stair_down_x, stair_down_y = find_valid_spawn(grid)
         grid[stair_down_y][stair_down_x] = ">"
+
         
         self.grid = grid
         self.entities = []
         self.world = world
-        
+        self.items = []
+
+        for _ in range(3):
+            self.add_item(Potion(0,0,"Potion","P", (140,255,200)))
+            
     
     def is_movable(self, x, y):
         return self.grid[y][x] != "#"
@@ -79,10 +107,14 @@ class Floor:
                         entity.level_up()
                         self.world.log_message(f"{entity.name} levels up to level {entity.level}!")
                         entity.score += 50
-                if entity.health <= 0:
-                    self.world.log_message(f"{entity.name} dies!")
-                    entity.dead = True
+                    if entity.health <= 0:
+                        self.world.log_message(f"{entity.name} dies!")
+                        entity.dead = True
                 return
+
+        for i in self.items:
+            if not i.used and i.x == new_x and i.y == new_y:
+                i.use(entity, self.world)
 
         entity.x = new_x
         entity.y = new_y
@@ -102,8 +134,12 @@ class Floor:
         entity.x = x
         entity.y = y
         self.entities.append(entity)
-
         
+    def add_item(self, item):
+        x,y = find_valid_spawn(self.grid)
+        item.x = x
+        item.y = y
+        self.items.append(item)
 
 
 def find_valid_spawn(grid):

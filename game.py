@@ -79,7 +79,7 @@ class World:
         entity_map = {}
         for entity in self.map.entities:
             pos = (entity.y, entity.x)
-            symbol = entity.symbol
+            symbol = (entity.symbol, entity.color)
             entity_map[pos] = symbol
 
         height = len(self.map.grid)
@@ -105,11 +105,11 @@ class World:
         for y, row in enumerate(self.map.grid):
             for x, ch in enumerate(row):
                 if (y, x) in entity_map:
-                    if entity_map[(y, x)] == "@":
+                    if entity_map[(y, x)][1] == "@":
                         text = font.render("@", True, (0, 255, 0))
                         screen.blit(text, (x * font_size, y * font_size + top_bar_size_offset))
                     else:
-                        text = font.render(entity_map[(y, x)], True, color)
+                        text = font.render(str(entity_map[(y, x)][0]), True, entity_map[(y,x)][1])
                         screen.blit(text, (x * font_size, y * font_size + top_bar_size_offset))
                 else:
                     if ch == "#":
@@ -146,7 +146,7 @@ font = pygame.font.SysFont("Consolas", font_size)
 screen = pygame.display.set_mode((grid_w * font_size, grid_h * font_size + (log_size * font_size) + (top_bar_size * font_size)))
 clock = pygame.time.Clock()
 
-player = Entity("player", 5, 5, 100, 5, "@")
+player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
 world = World(player)
 
 
@@ -182,7 +182,7 @@ while True:
                             sys.exit()
                         elif event.type == pygame.KEYDOWN:
                             if event.key == pygame.K_r:
-                                player = Entity("player", 5, 5, 100, 5, "@")
+                                player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
                                 world = World(player)
                                 waiting = False
                 # skip movement and updates while dead

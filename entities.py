@@ -4,7 +4,7 @@ import heapq
 # -------------------- Classes & API -------------------- #
 
 class Entity:
-    def __init__(self, name, x, y, health, attack, symbol, ai=None):
+    def __init__(self, name, x, y, health, attack, symbol, color, ai=None):
         self.name = name
         self.x = x
         self.y = y
@@ -19,6 +19,7 @@ class Entity:
         self.ai = ai
         self.ex_gain = 10  # experience given when killed
         self.score = 0
+        self.color = color
         if self.ai:
             self.ai.owner = self
 
@@ -52,15 +53,15 @@ def create_random_mob():
 
 def create_mob(name):
     if name == "orc":
-        mob = Entity("orc", 0, 0, 10, 3, "O", ai=AStarAi(None))
+        mob = Entity("orc", 0, 0, 10, 3, "O", (200,200,200), ai=AStarAi(None))
         mob.set_ex(20)
         return mob
     elif name == "snake":
-        mob = Entity("snake", 0, 0, 5, 2, "S", ai=ChaseAndWonderAi(None))
+        mob = Entity("snake", 0, 0, 5, 2, "S", (100,100,100), ai=ChaseAndWonderAi(None))
         mob.set_ex(10)
         return mob
     elif name == "rat":
-        mob = Entity("rat", 0, 0, 3, 1, "r", ai=WonderAi(None))
+        mob = Entity("rat", 0, 0, 3, 1, "r", (150,100,150), ai=WonderAi(None))
         mob.set_ex(5)
         return mob
     else:

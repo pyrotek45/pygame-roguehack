@@ -15,4 +15,4 @@ Adding them should be easy, their Ai is also decoupled from the entity class its
 
 floors are generated procedurally. 
 mobs should get stronger the farther down you go. currentlly, there is not much stratagy to the game, besides
-corret movement in battle, and targeting weaker mobs first to level up, or targeting stronger mobs first to lower incoming damage.
+correct movement in battle, and targeting weaker mobs first to level up, or targeting stronger mobs first to lower incoming damage.

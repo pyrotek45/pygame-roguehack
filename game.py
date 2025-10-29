@@ -1,6 +1,7 @@
 import pygame
 import sys
 import random
+import heapq
 
 pygame.init()
 
@@ -106,6 +107,20 @@ class ChaseAi(Ai):
         y = 0 if player.y == self.owner.y else (1 if player.y > self.owner.y else -1)
         world.move_entity(self.owner, x, y)
 
+
+class AStar(Ai):
+    def take_turn(self, world):
+        player = world.player
+        start = (self.owner.x, self.owner.y)
+        goal = (player.x, player.y)
+        path = astar_path(world, start, goal)
+        if path and len(path) > 1:
+            next_step = path[1]
+            x = next_step[0] - self.owner.x
+            y = next_step[1] - self.owner.y
+            world.move_entity(self.owner, x, y)
+
+
 class ChaseAndWonderAi(Ai):
     def take_turn(self, world):
         if random.random() < 0.5:
@@ -118,6 +133,61 @@ class ChaseAndWonderAi(Ai):
             # wonder
             x, y = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
             world.move_entity(self.owner, x, y)
+
+
+def heuristic(a, b):
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+def astar_path(world, start, goal):
+    height = len(world.map)
+    width = len(world.map[0])
+
+
+    def in_bounds(pos):
+        x, y = pos
+        return 0 <= x < width and 0 <= y < height
+
+    def passable(pos):
+        x, y = pos
+        return world.is_movable(x, y)
+
+    # 8 directions (N, S, E, W, diagonals)
+    directions = [
+        (1, 0), (-1, 0), (0, 1), (0, -1),
+    ]
+
+    open_set = []
+    heapq.heappush(open_set, (0, start))
+
+    came_from = {start: None}
+    g_score = {start: 0}
+
+    while open_set:
+        _, current = heapq.heappop(open_set)
+
+        if current == goal:
+            # reconstruct path
+            path = []
+            while current:
+                path.append(current)
+                current = came_from[current]
+            path.reverse()
+            return path
+
+        for dx, dy in directions:
+            neighbor = (current[0] + dx, current[1] + dy)
+            if not in_bounds(neighbor) or not passable(neighbor):
+                continue
+
+            tentative_g = g_score[current] + 1
+            if tentative_g < g_score.get(neighbor, float('inf')):
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g
+                f_score = tentative_g + heuristic(neighbor, goal)
+                heapq.heappush(open_set, (f_score, neighbor))
+
+    return None
+
 
 
 class Entity:
@@ -153,7 +223,7 @@ class Entity:
 # prolly want to make this more generic in the future??
 # maybe add it to the world class?
 def create_random_mob():
-    mob_type = random.choice(["orc", "snake", "rat"])
+    mob_type = random.choice(["orc", "snake", "rat", "astar"])
     return create_mob(mob_type)
 
 def create_mob(name):
@@ -167,6 +237,10 @@ def create_mob(name):
         return mob
     elif name == "rat":
         mob = Entity("rat", 0, 0, 3, 1, "r", ai=WonderAi(None))
+        mob.set_ex(5)
+        return mob
+    elif name == "astar":
+        mob = Entity("astar", 0, 0, 3, 1, "A", ai=AStar(None))
         mob.set_ex(5)
         return mob
     else:
@@ -242,16 +316,16 @@ class World:
     def log_message(self, message):
         self.log.append(message)    
 
-
+    def is_movable(self, x, y):
+        return self.map[y][x] != "#"
 
     def move_entity(self, entity, x, y):
         # check for walls and other stuff here
         new_x = entity.x + x
         new_y = entity.y + y
 
-        if self.map[new_y][new_x] == "#":
+        if not self.is_movable(new_x, new_y):
             return
-
 
         for e in self.entities:
             if e is not entity and e.x == new_x and e.y == new_y:

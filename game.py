@@ -17,7 +17,7 @@ class World:
         
         self.map.add_entity(player)
         
-        for _ in range(15):
+        for _ in range(3):
             mob = create_random_mob()
             self.map.add_entity(mob)
     
@@ -30,11 +30,13 @@ class World:
         if self.current_floor == len(self.floors) - 1:
             new_floor = Floor(self, grid_w, grid_h)
             # fill with mobs
-            for _ in range(random.randint(5, 15)):
+            for _ in range(random.randint(1,self.current_floor + 4)):
                 mob = create_random_mob()
                 x, y = find_valid_spawn(new_floor.grid)
                 mob.x = x
                 mob.y = y
+
+
                 # make mobs harder on deeper floors
                 attack = mob.attack + self.current_floor 
                 health = mob.max_health + self.current_floor 
@@ -43,11 +45,7 @@ class World:
                 mob.health = health
                 mob.max_health = health
 
-                # level up mob based on floor randomly
-                for _ in range(random.randint(1, self.current_floor + 1)):
-                    mob.level_up()
-
-                mob.set_ex(mob.ex_gain + self.current_floor * 5)
+                mob.set_ex(mob.ex_gain + self.current_floor * 2)
 
                 new_floor.entities.append(mob)
             
@@ -105,7 +103,7 @@ class World:
 
         top_bar_size_offset = (top_bar_size + 1) * font_size
 
-        text = font.render(f"Name: {self.player.name} LVL: {str(self.player.level)} HP: {str(self.player.health)} EX: {str(self.player.experience)}/{str(self.player.experience_to_level)} Attack: {str(self.player.attack)}", True, color)
+        text = font.render(f"Name: {self.player.name} LVL: {str(self.player.level)} HP: {str(self.player.health)}/{str(self.player.max_health)} EX: {str(self.player.experience)}/{str(self.player.experience_to_level)} Attack: {str(self.player.attack)}", True, color)
         screen.blit(text, (0, font_size))
         text = font.render(f"Floor: {self.current_floor} Score: {str(self.player.score)} | Press ? for help", True, color)
         screen.blit(text, (0, font_size * 2))
@@ -131,7 +129,7 @@ class World:
                     elif ch == "<":
                         if world.current_floor == 0:
                             text = font.render(".", True, color)
-                        elif world.current_floor == 1:
+                        elif world.current_floor >= 1:
                             text = font.render("<", True, (255, 215, 0))
                     elif ch == ">":
                         text = font.render(">", True, (255, 215, 0))
@@ -145,7 +143,6 @@ class World:
             text = font.render(log_entry, True, color)
             screen.blit(text, (0, log_start_y + i * font_size + top_bar_size_offset))
             
-
 pygame.init()
 
 font_size = 32
@@ -159,7 +156,6 @@ clock = pygame.time.Clock()
 
 player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
 world = World(player)
-
 
 while True:
     for event in pygame.event.get():
@@ -246,11 +242,11 @@ while True:
             elif event.key == pygame.K_h:
                 world.map.move_entity(player, -1, 0)
 
-
             # go down stairs
             elif event.key == pygame.K_PERIOD:
                 if world.map.grid[player.y][player.x] == ">":
                     world.go_down_stairs()
+
             # go up stairs
             elif event.key == pygame.K_COMMA and world.current_floor > 0:
                 if world.map.grid[player.y][player.x] == "<":

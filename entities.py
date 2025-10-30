@@ -25,11 +25,11 @@ class Entity:
 
     def level_up(self):
         self.level += 1
-        self.max_health += 10
-        self.attack += 2
+        self.max_health += 10 + self.level
+        self.attack += 5 + self.level
         self.health = self.max_health
         self.experience = 0
-        self.experience_to_level = int(self.experience_to_level * 1.5)
+        self.experience_to_level = int(self.experience_to_level * 1.2)
 
     def set_ex(self,amount):
         self.ex_gain = amount

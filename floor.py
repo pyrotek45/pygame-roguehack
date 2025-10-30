@@ -9,7 +9,7 @@ class Item:
         self.color = color
         self.used = False
 
-    def use(self, floor):
+    def use(self, entity, world):
         pass
 
 # gets used as soon as stepped on
@@ -75,14 +75,13 @@ class Floor:
         self.world = world
         self.items = []
 
+        # add sone potions to the floor
         for _ in range(3):
             self.add_item(Potion(0,0,"Potion","P", (140,255,200)))
             
     
     def is_movable(self, x, y):
         return self.grid[y][x] != "#"
-
-
 
     def move_entity(self, entity, x, y):
         # check for walls and other stuff here
@@ -145,7 +144,6 @@ class Floor:
 def find_valid_spawn(grid):
     height = len(grid)
     width = len(grid[0])
-
     while True:
         x = random.randint(0, width - 1)
         y = random.randint(0, height - 1)

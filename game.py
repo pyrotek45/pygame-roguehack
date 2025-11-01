@@ -1,26 +1,47 @@
 import pygame
 import sys
 import random
-import heapq
 
+from enum import Enum, auto
 from entities import Entity, create_random_mob
-
 from floor import Floor, find_down_stairs, find_up_stairs, find_valid_spawn
 
+pygame.init()
 
+FONTSIZE = 32
+GRID_W = 40
+GRID_H = 20
+LOG_SIZE = 8
+TOP_BAR_SIZE = 2
+
+font = pygame.font.SysFont("Consolas", FONTSIZE)
+screen = pygame.display.set_mode((GRID_W * FONTSIZE, GRID_H * FONTSIZE + (LOG_SIZE * FONTSIZE) + (TOP_BAR_SIZE * FONTSIZE)))
+clock = pygame.time.Clock()
+
+class State(Enum):
+    GAMEOVER = auto()
+    OVERWORLD = auto()
+    HELP = auto()
+    
 class World:
     def __init__(self, player):
+        self.state = State.OVERWORLD
+
         self.player = player
-        self.floors = [Floor(self, grid_w, grid_h)]
-        self.log = []
+
+        self.floors = [Floor(self, GRID_W, GRID_H)]
         self.current_floor = 0
-        
+        self.add_mobs(3)
+
+        self.log = []
+
         self.map.add_entity(player)
-        
-        for _ in range(3):
+
+
+    def add_mobs(self, num):
+        for _ in range(num):
             mob = create_random_mob()
             self.map.add_entity(mob)
-    
     
     @property
     def map(self):
@@ -28,7 +49,7 @@ class World:
 
     def go_down_stairs(self):
         if self.current_floor == len(self.floors) - 1:
-            new_floor = Floor(self, grid_w, grid_h)
+            new_floor = Floor(self, GRID_W, GRID_H)
             # fill with mobs
             for _ in range(random.randint(1,self.current_floor + 4)):
                 mob = create_random_mob()
@@ -61,18 +82,18 @@ class World:
         self.current_floor -= 1
         self.player.x, self.player.y = find_down_stairs(self.map.grid)
 
-        
-    
+    # log can only show 8, so perhaps list needs to erase non visable ones, otherwise
+    # list could grow and waste memory. unless there is a log history feature at some point?
     def log_message(self, message):
         self.log.append(message)
-        
+        while len(self.log) > 9:
+            self.log.pop(0)
+                    
     def update(self):
         self.map.update()
-    
-    def draw(self):
-        screen.fill((0, 0, 0))
-        color = (255, 255, 255)
 
+    def draw_overview(self):
+        color = (255, 255, 255)
         # stores entity's location to get drawn
         entity_map = {}
         for entity in self.map.entities:
@@ -101,25 +122,25 @@ class World:
                         return True
             return False
 
-        top_bar_size_offset = (top_bar_size + 1) * font_size
+        top_bar_size_offset = (TOP_BAR_SIZE + 1) * FONTSIZE
 
         text = font.render(f"Name: {self.player.name} LVL: {str(self.player.level)} HP: {str(self.player.health)}/{str(self.player.max_health)} EX: {str(self.player.experience)}/{str(self.player.experience_to_level)} Attack: {str(self.player.attack)}", True, color)
-        screen.blit(text, (0, font_size))
+        screen.blit(text, (0, FONTSIZE))
         text = font.render(f"Floor: {self.current_floor} Score: {str(self.player.score)} | Press ? for help", True, color)
-        screen.blit(text, (0, font_size * 2))
-    
+        screen.blit(text, (0, FONTSIZE * 2))
+
         for y, row in enumerate(self.map.grid):
             for x, ch in enumerate(row):
                 if (y, x) in entity_map:
                     if entity_map[(y, x)][1] == "@":
                         text = font.render("@", True, (0, 255, 0))
-                        screen.blit(text, (x * font_size, y * font_size + top_bar_size_offset))
+                        screen.blit(text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset))
                     else:
                         text = font.render(str(entity_map[(y, x)][0]), True, entity_map[(y,x)][1])
-                        screen.blit(text, (x * font_size, y * font_size + top_bar_size_offset))
+                        screen.blit(text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset))
                 elif (y, x) in item_map:
                     text = font.render(str(item_map[(y, x)][0]), True, item_map[(y,x)][1])
-                    screen.blit(text, (x * font_size, y * font_size + top_bar_size_offset))
+                    screen.blit(text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset))
                 else:
                     if ch == "#":
                         if wall_visible(y, x):
@@ -135,24 +156,116 @@ class World:
                         text = font.render(">", True, (255, 215, 0))
                     else:
                         text = font.render(ch, True, color)
-                    screen.blit(text, (x * font_size, y * font_size + top_bar_size_offset))
+                    screen.blit(text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset))
 
         # draw log
-        log_start_y = grid_h * font_size
-        for i, log_entry in enumerate(self.log[-log_size:]):
+        log_start_y = GRID_H * FONTSIZE
+        for i, log_entry in enumerate(self.log[-LOG_SIZE:]):
             text = font.render(log_entry, True, color)
-            screen.blit(text, (0, log_start_y + i * font_size + top_bar_size_offset))
-            
-pygame.init()
+            screen.blit(text, (0, log_start_y + i * FONTSIZE + top_bar_size_offset))
 
-font_size = 32
-grid_w = 40
-grid_h = 20
-log_size = 8
-top_bar_size = 2
-font = pygame.font.SysFont("Consolas", font_size)
-screen = pygame.display.set_mode((grid_w * font_size, grid_h * font_size + (log_size * font_size) + (top_bar_size * font_size)))
-clock = pygame.time.Clock()
+    def draw_gameover(self):        
+        # print dead screen
+        text = font.render("You died!", True, (255, 0, 0))
+        screen.blit(text, (GRID_W * FONTSIZE // 2 - text.get_width() // 2, GRID_H * FONTSIZE // 2))
+        # show restart option
+        text = font.render("Press R to restart", True, (255, 255, 255))
+        screen.blit(text, (GRID_W * FONTSIZE // 2 - text.get_width() // 2, GRID_H * FONTSIZE // 2 + FONTSIZE))
+
+    def draw_help(self):
+        help_lines = [
+            "Controls:",
+            "Arrow Keys / HJKL: Move",
+            "., : Go Down/Up Stairs",
+            "R: Restart Game",
+            "Q / ESC: Quit Game",
+            "",
+            "Press any key to return..."
+        ]
+        for i, line in enumerate(help_lines):
+            text = font.render(line, True, (255, 255, 255))
+            screen.blit(text, (50, 50 + i * FONTSIZE))
+    
+    def draw(self):
+        # always reset screen to black
+        screen.fill((0, 0, 0))
+        match self.state:
+            case State.OVERWORLD:
+                self.draw_overview()
+            case State.HELP:
+                self.draw_help()
+            case State.GAMEOVER:
+                self.draw_gameover()
+
+
+    def handle_input(self, input):
+        match self.state:
+            case State.OVERWORLD:
+                match input:
+                    case pygame.K_UP:
+                        self.map.move_entity(self.player, 0, -1)
+                    case pygame.K_DOWN:
+                        self.map.move_entity(self.player, 0, 1)
+                    case pygame.K_RIGHT:
+                        self.map.move_entity(self.player, 1, 0)
+                    case pygame.K_LEFT:
+                        self.map.move_entity(self.player, -1, 0)
+
+                    case pygame.K_k:
+                        self.map.move_entity(self.player, 0, -1)
+                    case pygame.K_j:
+                        self.map.move_entity(self.player, 0, 1)
+                    case pygame.K_l:
+                        self.map.move_entity(self.player, 1, 0)
+                    case pygame.K_h:
+                        self.map.move_entity(self.player, -1, 0)
+
+                    case pygame.K_PERIOD:
+                        if self.map.grid[self.player.y][self.player.x] == ">":
+                            self.go_down_stairs()
+
+                    case pygame.K_COMMA:
+                        if self.current_floor > 0 and world.map.grid[self.player.y][self.player.x] == "<":
+                            world.go_up_stairs()
+
+                    case pygame.K_r:
+                        self = World(player)
+
+                    case pygame.K_q :
+                        pygame.quit()
+                        sys.exit()
+
+                    case _:
+                        pass
+
+            case State.GAMEOVER:
+                match input:
+                    case pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
+                    case pygame.K_r:
+                        player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
+                        # a default world starts with the overworld state
+                        self = World(player)
+                    case _:
+                        pass
+
+            case State.HELP:
+                match input:
+                    case pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
+
+                    case pygame.K_r:
+                        player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
+                        self = World(player)
+
+                    case _:
+                        self.state = State.OVERWORLD
+                pass
+        
+
+
 
 player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
 world = World(player)
@@ -163,103 +276,9 @@ while True:
             pygame.quit()
             sys.exit()
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                pygame.quit()
-                sys.exit()
-            elif event.key == pygame.K_q:
-                pygame.quit()
-                sys.exit()
-
-            # if player is dead, show death screen and only accept restart
-            if player.dead:
-                screen.fill((0, 0, 0))
-                # print dead screen
-                text = font.render("You died!", True, (255, 0, 0))
-                screen.blit(text, (grid_w * font_size // 2 - text.get_width() // 2, grid_h * font_size // 2))
-                # show restart option
-                text = font.render("Press R to restart", True, (255, 255, 255))
-                screen.blit(text, (grid_w * font_size // 2 - text.get_width() // 2, grid_h * font_size // 2 + font_size))
-                pygame.display.flip()
-                # wait for player to press R or quit
-                waiting = True
-                while waiting:
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            pygame.quit()
-                            sys.exit()
-                        elif event.type == pygame.KEYDOWN:
-                            if event.key == pygame.K_r:
-                                player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
-                                world = World(player)
-                                waiting = False
-                # skip movement and updates while dead
-                continue
-            
-
-            # press ? for help menu
-            if event.key == pygame.K_SLASH or event.key == pygame.K_QUESTION:
-                screen.fill((0, 0, 0))
-                help_lines = [
-                    "Controls:",
-                    "Arrow Keys / HJKL: Move",
-                    "., : Go Down/Up Stairs",
-                    "R: Restart Game",
-                    "Q / ESC: Quit Game",
-                    "",
-                    "Press any key to return..."
-                ]
-                for i, line in enumerate(help_lines):
-                    text = font.render(line, True, (255, 255, 255))
-                    screen.blit(text, (50, 50 + i * font_size))
-                pygame.display.flip()
-                waiting = True
-                while waiting:
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            pygame.quit()
-                            sys.exit()
-                        elif event.type == pygame.KEYDOWN:
-                            waiting = False
-                continue
-
-            # janky pygame coord x right, -x left, y down, -y up
-            if event.key == pygame.K_UP:
-                world.map.move_entity(player, 0, -1)
-            elif event.key == pygame.K_DOWN:
-                world.map.move_entity(player, 0, 1)
-            elif event.key == pygame.K_RIGHT:
-                world.map.move_entity(player, 1, 0)
-            elif event.key == pygame.K_LEFT:
-                world.map.move_entity(player, -1, 0)
-
-            # vim style keybinds 
-            elif event.key == pygame.K_k:
-                world.map.move_entity(player, 0, -1)
-            elif event.key == pygame.K_j:
-                world.map.move_entity(player, 0, 1)
-            elif event.key == pygame.K_l:
-                world.map.move_entity(player, 1, 0)
-            elif event.key == pygame.K_h:
-                world.map.move_entity(player, -1, 0)
-
-            # go down stairs
-            elif event.key == pygame.K_PERIOD:
-                if world.map.grid[player.y][player.x] == ">":
-                    world.go_down_stairs()
-
-            # go up stairs
-            elif event.key == pygame.K_COMMA and world.current_floor > 0:
-                if world.map.grid[player.y][player.x] == "<":
-                    world.go_up_stairs()
-
-            # reset keys
-            elif event.key == pygame.K_r:
-                world = World(player)
-
-            # update when player moves
+            world.handle_input(event.key)
             world.update()
 
     world.draw()
-
     pygame.display.flip()
     clock.tick(30)

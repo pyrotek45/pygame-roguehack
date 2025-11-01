@@ -3,6 +3,7 @@ import heapq
 
 # -------------------- Classes & API -------------------- #
 
+
 class Entity:
     def __init__(self, name, x, y, health, attack, symbol, color, ai=None):
         self.name = name
@@ -31,7 +32,7 @@ class Entity:
         self.experience = 0
         self.experience_to_level = int(self.experience_to_level * 1.2)
 
-    def set_ex(self,amount):
+    def set_ex(self, amount):
         self.ex_gain = amount
 
 
@@ -43,7 +44,6 @@ class Ai:
         pass
 
 
-
 # prolly want to make this more generic in the future??
 # maybe add it to the world class?
 def create_random_mob():
@@ -53,25 +53,26 @@ def create_random_mob():
 
 def create_mob(name):
     if name == "orc":
-        mob = Entity("orc", 0, 0, 10, 3, "O", (200,200,200), ai=AStarAi(None))
+        mob = Entity("orc", 0, 0, 10, 3, "O", (200, 200, 200), ai=AStarAi(None))
         mob.set_ex(20)
         return mob
     elif name == "snake":
-        mob = Entity("snake", 0, 0, 5, 2, "S", (100,100,100), ai=ChaseAndWonderAi(None))
+        mob = Entity(
+            "snake", 0, 0, 5, 2, "S", (100, 100, 100), ai=ChaseAndWonderAi(None)
+        )
         mob.set_ex(10)
         return mob
     elif name == "rat":
-        mob = Entity("rat", 0, 0, 3, 1, "r", (150,100,150), ai=WonderAi(None))
+        mob = Entity("rat", 0, 0, 3, 1, "r", (150, 100, 150), ai=WonderAi(None))
         mob.set_ex(5)
         return mob
     else:
         return None
 
 
-
 # ----------------- AI Implementations ---------------- #
 
-    
+
 class WonderAi(Ai):
     def take_turn(self, floor):
         x, y = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
@@ -104,8 +105,16 @@ class ChaseAndWonderAi(Ai):
         if random.random() < 0.5:
             # chase
             player = floor.world.player
-            x = 0 if player.x == self.owner.x else (1 if player.x > self.owner.x else -1)
-            y = 0 if player.y == self.owner.y else (1 if player.y > self.owner.y else -1)
+            x = (
+                0
+                if player.x == self.owner.x
+                else (1 if player.x > self.owner.x else -1)
+            )
+            y = (
+                0
+                if player.y == self.owner.y
+                else (1 if player.y > self.owner.y else -1)
+            )
             floor.move_entity(self.owner, x, y)
         else:
             # wonder
@@ -115,13 +124,14 @@ class ChaseAndWonderAi(Ai):
 
 # ----------------- Pathfinding ---------------- #
 
+
 def heuristic(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
 
 def astar_path(world, start, goal):
     height = len(world.grid)
     width = len(world.grid[0])
-
 
     def in_bounds(pos):
         x, y = pos
@@ -133,7 +143,10 @@ def astar_path(world, start, goal):
 
     # 8 directions (N, S, E, W, diagonals)
     directions = [
-        (1, 0), (-1, 0), (0, 1), (0, -1),
+        (1, 0),
+        (-1, 0),
+        (0, 1),
+        (0, -1),
     ]
 
     open_set = []
@@ -160,7 +173,7 @@ def astar_path(world, start, goal):
                 continue
 
             tentative_g = g_score[current] + 1
-            if tentative_g < g_score.get(neighbor, float('inf')):
+            if tentative_g < g_score.get(neighbor, float("inf")):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g
                 f_score = tentative_g + heuristic(neighbor, goal)

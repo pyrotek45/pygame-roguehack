@@ -1,5 +1,6 @@
 import random
 
+
 class Item:
     def __init__(self, x, y, name, symbol, color):
         self.x = x
@@ -12,6 +13,7 @@ class Item:
     def use(self, entity, world):
         pass
 
+
 # gets used as soon as stepped on
 class Potion(Item):
     def use(self, entity, world):
@@ -22,10 +24,40 @@ class Potion(Item):
         self.used = True
         world.log_message(f"{entity.name} gained 20 health from potion")
 
-               
+
+class System:
+    def __init__(self):
+        pass
+
+    def run(self, floor):
+        pass
+
+
+class EntitySystem(System):
+    def run(self, floor):
+        for e in list(floor.components["entities"]):
+            if e.ai and not e.dead:
+                e.ai.take_turn(floor)
+
+        floor.components["entities"] = [
+            e for e in floor.components["entities"] if not e.dead
+        ]
+
 
 class Floor:
     def __init__(self, world, grid_w, grid_h):
+        self.grid = self.create_floor(grid_w, grid_h)
+        self.world = world
+
+        self.components = {"entities": [], "items": []}
+
+        self.systems = [EntitySystem()]
+
+        # add some potions to the floor
+        for _ in range(3):
+            self.add_component("items", Potion(0, 0, "Potion", "P", (140, 255, 200)))
+
+    def create_floor(self, grid_w, grid_h):
         grid = [["#" for _ in range(grid_w)] for _ in range(grid_h)]
         rooms = []
 
@@ -69,17 +101,8 @@ class Floor:
         stair_down_x, stair_down_y = find_valid_spawn(grid)
         grid[stair_down_y][stair_down_x] = ">"
 
-        
-        self.grid = grid
-        self.entities = []
-        self.world = world
-        self.items = []
+        return grid
 
-        # add sone potions to the floor
-        for _ in range(3):
-            self.add_item(Potion(0,0,"Potion","P", (140,255,200)))
-            
-    
     def is_movable(self, x, y):
         return self.grid[y][x] != "#"
 
@@ -91,54 +114,59 @@ class Floor:
         if not self.is_movable(new_x, new_y):
             return
 
-        for e in self.entities:
+        for e in self.components["entities"]:
             if e is not entity and e.x == new_x and e.y == new_y:
                 # attack seq (entity then other: e)
                 e.health -= entity.attack
-                self.world.log_message(f"{entity.name} attacks {e.name} for {entity.attack}!")
+                self.world.log_message(
+                    f"{entity.name} attacks {e.name} for {entity.attack}!"
+                )
                 if e.health <= 0:
                     self.world.log_message(f"{e.name} dies!")
                     e.dead = True
                     entity.experience += e.ex_gain
-                    self.world.log_message(f"{entity.name} gains {e.ex_gain} experience!")
+                    self.world.log_message(
+                        f"{entity.name} gains {e.ex_gain} experience!"
+                    )
                     entity.score += e.ex_gain
                     if entity.experience >= entity.experience_to_level:
                         entity.level_up()
-                        self.world.log_message(f"{entity.name} levels up to level {entity.level}!")
+                        self.world.log_message(
+                            f"{entity.name} levels up to level {entity.level}!"
+                        )
                         entity.score += 50
                     if entity.health <= 0:
                         self.world.log_message(f"{entity.name} dies!")
                         entity.dead = True
                 return
 
-        for i in self.items:
+        for i in self.components["items"]:
             if not i.used and i.x == new_x and i.y == new_y:
                 i.use(entity, self.world)
 
         entity.x = new_x
         entity.y = new_y
-    
-    
-    def update(self):
-        # move the mobs
-        for e in list(self.entities):
-            if e.ai and not e.dead:
-                e.ai.take_turn(self)
 
-        self.entities = [e for e in self.entities if not e.dead]
-    
-    
-    def add_entity(self, entity):
-        x,y = find_valid_spawn(self.grid)
-        entity.x = x
-        entity.y = y
-        self.entities.append(entity)
-        
-    def add_item(self, item):
-        x,y = find_valid_spawn(self.grid)
-        item.x = x
-        item.y = y
-        self.items.append(item)
+    def update(self):
+        for system in self.systems:
+            system.run(self)
+
+    def add_system(self, system):
+        self.systems.append(system)
+
+    def add_component(self, component, value=None):
+        if component in self.components:
+            if value:
+                if hasattr(value, "x") and hasattr(value, "y"):
+                    x, y = find_valid_spawn(self.grid)
+                    value.x = x
+                    value.y = y
+                    self.components[component].append(value)
+                else:
+                    self.components[component].append(value)
+
+        else:
+            self.components[component] = []
 
 
 def find_valid_spawn(grid):
@@ -150,12 +178,14 @@ def find_valid_spawn(grid):
         if grid[y][x] == ".":
             return (x, y)
 
+
 def find_up_stairs(grid):
     for y in range(len(grid)):
         for x in range(len(grid[y])):
             if grid[y][x] == "<":
                 return (x, y)
     return None
+
 
 def find_down_stairs(grid):
     for y in range(len(grid)):

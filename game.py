@@ -105,7 +105,7 @@ class World:
         if self.player.health <= 0:
             self.state = State.GAMEOVER
 
-    def draw_overview(self):
+    def draw_overworld(self):
         color = (255, 255, 255)
         # stores entity's location to get drawn
         entity_map = {}
@@ -204,7 +204,7 @@ class World:
         screen.fill((0, 0, 0))
         match self.state:
             case State.OVERWORLD:
-                self.draw_overview()
+                self.draw_overworld()
             case State.GAMEOVER:
                 self.draw_gameover()
             case State.HELP:

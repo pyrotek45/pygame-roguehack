@@ -249,9 +249,13 @@ class World:
 
                     case pygame.K_SLASH:
                         self.state = State.HELP
+                        return
 
                     case _:
                         pass
+
+                # not every action should update the world
+                self.update()
 
             case State.GAMEOVER:
                 match input:
@@ -277,7 +281,6 @@ while True:
             sys.exit()
         elif event.type == pygame.KEYDOWN:
             world.handle_input(event.key)
-            world.update()
 
     world.draw()
 

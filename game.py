@@ -24,10 +24,10 @@ class State(Enum):
     HELP = auto()
     
 class World:
-    def __init__(self, player):
+    def __init__(self):
         self.state = State.OVERWORLD
 
-        self.player = player
+        self.player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
 
         self.floors = [Floor(self, GRID_W, GRID_H)]
         self.current_floor = 0
@@ -35,8 +35,19 @@ class World:
 
         self.log = []
 
-        self.map.add_entity(player)
+        self.map.add_entity(self.player)
 
+    def reset(self):
+        self.state = State.OVERWORLD
+
+        self.player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
+
+        self.floors = [Floor(self, GRID_W, GRID_H)]
+        self.current_floor = 0
+        self.add_mobs(3)
+
+        self.log = []
+        self.map.add_entity(self.player)
 
     def add_mobs(self, num):
         for _ in range(num):
@@ -91,6 +102,8 @@ class World:
                     
     def update(self):
         self.map.update()
+        if self.player.health <= 0:
+            self.state = State.GAMEOVER
 
     def draw_overview(self):
         color = (255, 255, 255)
@@ -192,11 +205,10 @@ class World:
         match self.state:
             case State.OVERWORLD:
                 self.draw_overview()
-            case State.HELP:
-                self.draw_help()
             case State.GAMEOVER:
                 self.draw_gameover()
-
+            case State.HELP:
+                self.draw_help()
 
     def handle_input(self, input):
         match self.state:
@@ -229,46 +241,34 @@ class World:
                             world.go_up_stairs()
 
                     case pygame.K_r:
-                        self = World(player)
+                        self.reset()
 
                     case pygame.K_q :
                         pygame.quit()
                         sys.exit()
+
+                    case pygame.K_SLASH:
+                        self.state = State.HELP
 
                     case _:
                         pass
 
             case State.GAMEOVER:
                 match input:
-                    case pygame.QUIT:
-                        pygame.quit()
-                        sys.exit()
                     case pygame.K_r:
-                        player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
-                        # a default world starts with the overworld state
-                        self = World(player)
+                        self.reset()                        
                     case _:
                         pass
 
             case State.HELP:
                 match input:
-                    case pygame.QUIT:
-                        pygame.quit()
-                        sys.exit()
-
-                    case pygame.K_r:
-                        player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
-                        self = World(player)
-
                     case _:
                         self.state = State.OVERWORLD
                 pass
         
 
-
-
-player = Entity("player", 5, 5, 100, 5, (0,255,0), "@")
-world = World(player)
+# main game setup
+world = World()
 
 while True:
     for event in pygame.event.get():
@@ -280,5 +280,6 @@ while True:
             world.update()
 
     world.draw()
+
     pygame.display.flip()
     clock.tick(30)

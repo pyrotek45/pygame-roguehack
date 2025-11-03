@@ -105,16 +105,8 @@ class ChaseAndWonderAi(Ai):
         if random.random() < 0.5:
             # chase
             player = floor.world.player
-            x = (
-                0
-                if player.x == self.owner.x
-                else (1 if player.x > self.owner.x else -1)
-            )
-            y = (
-                0
-                if player.y == self.owner.y
-                else (1 if player.y > self.owner.y else -1)
-            )
+            x = ( 0 if player.x == self.owner.x else (1 if player.x > self.owner.x else -1) )
+            y = ( 0 if player.y == self.owner.y else (1 if player.y > self.owner.y else -1) )
             floor.move_entity(self.owner, x, y)
         else:
             # wonder

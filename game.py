@@ -3,8 +3,8 @@ import sys
 import random
 
 from enum import Enum, auto
-from entities import Entity, create_random_mob
-from floor import Floor, find_down_stairs, find_up_stairs, find_valid_spawn
+from entities import Entity, create_random_mob 
+from floor import Floor 
 
 pygame.init()
 
@@ -15,12 +15,7 @@ LOG_SIZE = 8
 TOP_BAR_SIZE = 2
 
 font = pygame.font.SysFont("Consolas", FONTSIZE)
-screen = pygame.display.set_mode(
-    (
-        GRID_W * FONTSIZE,
-        GRID_H * FONTSIZE + (LOG_SIZE * FONTSIZE) + (TOP_BAR_SIZE * FONTSIZE),
-    )
-)
+screen = pygame.display.set_mode( ( GRID_W * FONTSIZE, GRID_H * FONTSIZE + (LOG_SIZE * FONTSIZE) + (TOP_BAR_SIZE * FONTSIZE)) )
 clock = pygame.time.Clock()
 
 
@@ -54,7 +49,7 @@ class World:
         self.add_mobs(3)
 
         self.log = []
-        self.map.add_component("entitites", self.player)
+        self.map.add_component("entities", self.player)
 
     def add_mobs(self, num):
         for _ in range(num):
@@ -71,7 +66,7 @@ class World:
             # fill with mobs
             for _ in range(random.randint(1, self.current_floor + 4)):
                 mob = create_random_mob()
-                x, y = find_valid_spawn(new_floor.grid)
+                x, y = new_floor.find_valid_spawn(new_floor.grid)
                 mob.x = x
                 mob.y = y
 
@@ -92,11 +87,11 @@ class World:
             self.floors.append(new_floor)
 
         self.current_floor += 1
-        self.player.x, self.player.y = find_up_stairs(self.map.grid)
+        self.player.x, self.player.y = self.map.find_up_stairs(self.map.grid)
 
     def go_up_stairs(self):
         self.current_floor -= 1
-        self.player.x, self.player.y = find_down_stairs(self.map.grid)
+        self.player.x, self.player.y = self.map.find_down_stairs(self.map.grid)
 
     # log can only show 8, so perhaps list needs to erase non visable ones, otherwise
     # list could grow and waste memory. unless there is a log history feature at some point?
@@ -112,20 +107,31 @@ class World:
 
     def draw_overworld(self):
         color = (255, 255, 255)
-        # stores entity's location to get drawn
-        entity_map = {}
-        for entity in self.map.components["entities"]:
-            pos = (entity.y, entity.x)
-            symbol = (entity.symbol, entity.color)
-            entity_map[pos] = symbol
 
-        # stores entity's location to get drawn
-        item_map = {}
-        for item in self.map.components["items"]:
-            if not item.used:
-                pos = (item.y, item.x)
-                symbol = (item.symbol, item.color)
-                item_map[pos] = symbol
+        map_overlay = {}
+        for overlay in self.map.components.values():
+            for obj in overlay:
+                # this kind of sucks. all items need some sort of visablity
+                # attribute but whatever ig. when adding something to the
+                # components use one of these attributes. 
+                if hasattr(obj, "dead") and not obj.dead:
+                    pos = (obj.y, obj.x)
+                    symbol = (obj.symbol, obj.color)
+                    if pos not in map_overlay:
+                        map_overlay[pos] = symbol
+                    continue
+                elif hasattr(obj, "used") and not obj.used:
+                    pos = (obj.y, obj.x)
+                    symbol = (obj.symbol, obj.color)
+                    if pos not in map_overlay:
+                        map_overlay[pos] = symbol
+                    continue
+                elif hasattr(obj, "visable") and obj.visable:
+                    pos = (obj.y, obj.x)
+                    symbol = (obj.symbol, obj.color)
+                    if pos not in map_overlay:
+                        map_overlay[pos] = symbol
+                    continue
 
         height = len(self.map.grid)
         width = len(self.map.grid[0])
@@ -141,42 +147,20 @@ class World:
             return False
 
         top_bar_size_offset = (TOP_BAR_SIZE + 1) * FONTSIZE
-
-        text = font.render(
-            f"Name: {self.player.name} LVL: {str(self.player.level)} HP: {str(self.player.health)}/{str(self.player.max_health)} EX: {str(self.player.experience)}/{str(self.player.experience_to_level)} Attack: {str(self.player.attack)}",
-            True,
-            color,
-        )
+        text = font.render( f"Name: {self.player.name} LVL: {str(self.player.level)} HP: {str(self.player.health)}/{str(self.player.max_health)} EX: {str(self.player.experience)}/{str(self.player.experience_to_level)} Attack: {str(self.player.attack)}", True, color, )
         screen.blit(text, (0, FONTSIZE))
-        text = font.render(
-            f"Floor: {self.current_floor} Score: {str(self.player.score)} | Press ? for help",
-            True,
-            color,
-        )
+        text = font.render( f"Floor: {self.current_floor} Score: {str(self.player.score)} | Press ? for help", True, color, )
         screen.blit(text, (0, FONTSIZE * 2))
 
         for y, row in enumerate(self.map.grid):
             for x, ch in enumerate(row):
-                if (y, x) in entity_map:
-                    if entity_map[(y, x)][1] == "@":
+                if (y, x) in map_overlay:
+                    if map_overlay[(y, x)][1] == "@":
                         text = font.render("@", True, (0, 255, 0))
-                        screen.blit(
-                            text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset)
-                        )
+                        screen.blit( text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset) )
                     else:
-                        text = font.render(
-                            str(entity_map[(y, x)][0]), True, entity_map[(y, x)][1]
-                        )
-                        screen.blit(
-                            text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset)
-                        )
-                elif (y, x) in item_map:
-                    text = font.render(
-                        str(item_map[(y, x)][0]), True, item_map[(y, x)][1]
-                    )
-                    screen.blit(
-                        text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset)
-                    )
+                        text = font.render( str(map_overlay[(y, x)][0]), True, map_overlay[(y, x)][1] )
+                        screen.blit( text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset) )
                 else:
                     if ch == "#":
                         if wall_visible(y, x):
@@ -192,9 +176,7 @@ class World:
                         text = font.render(">", True, (255, 215, 0))
                     else:
                         text = font.render(ch, True, color)
-                    screen.blit(
-                        text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset)
-                    )
+                    screen.blit( text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset) )
 
         # draw log
         log_start_y = GRID_H * FONTSIZE
@@ -205,19 +187,10 @@ class World:
     def draw_gameover(self):
         # print dead screen
         text = font.render("You died!", True, (255, 0, 0))
-        screen.blit(
-            text,
-            (GRID_W * FONTSIZE // 2 - text.get_width() // 2, GRID_H * FONTSIZE // 2),
-        )
+        screen.blit( text, (GRID_W * FONTSIZE // 2 - text.get_width() // 2, GRID_H * FONTSIZE // 2), )
         # show restart option
         text = font.render("Press R to restart", True, (255, 255, 255))
-        screen.blit(
-            text,
-            (
-                GRID_W * FONTSIZE // 2 - text.get_width() // 2,
-                GRID_H * FONTSIZE // 2 + FONTSIZE,
-            ),
-        )
+        screen.blit( text, ( GRID_W * FONTSIZE // 2 - text.get_width() // 2, GRID_H * FONTSIZE // 2 + FONTSIZE, ), )
 
     def draw_help(self):
         help_lines = [
@@ -269,16 +242,16 @@ class World:
                     case pygame.K_PERIOD:
                         if self.map.grid[self.player.y][self.player.x] == ">":
                             self.go_down_stairs()
+                        return
 
                     case pygame.K_COMMA:
-                        if (
-                            self.current_floor > 0
-                            and world.map.grid[self.player.y][self.player.x] == "<"
-                        ):
+                        if self.current_floor > 0 and world.map.grid[self.player.y][self.player.x] == "<" :
                             world.go_up_stairs()
+                        return
 
                     case pygame.K_r:
                         self.reset()
+                        return
 
                     case pygame.K_q:
                         pygame.quit()
@@ -289,9 +262,8 @@ class World:
                         return
 
                     case _:
-                        pass
+                        return
 
-                # not every action should update the world
                 self.update()
 
             case State.GAMEOVER:

@@ -1,30 +1,6 @@
 import random
 
 
-class Item:
-    def __init__(self, x, y, name, symbol, color):
-        self.x = x
-        self.y = y
-        self.symbol = symbol
-        self.name = name
-        self.color = color
-        self.used = False
-
-    def use(self, entity, world):
-        pass
-
-
-# gets used as soon as stepped on
-class Potion(Item):
-    def use(self, entity, world):
-        entity.health += 20
-        if entity.health > entity.max_health:
-            entity.health = entity.max_health
-
-        self.used = True
-        world.log_message(f"{entity.name} gained 20 health from potion")
-
-
 class System:
     def __init__(self):
         pass
@@ -33,29 +9,102 @@ class System:
         pass
 
 
+class Potion:
+    def __init__(self, x, y, name, symbol, color):
+        self.x = x
+        self.y = y
+        self.symbol = symbol
+        self.name = name
+        self.color = color
+        self.used = False
+
+    def activate(self, entity, world):
+        entity.health += 20
+        if entity.health > entity.max_health:
+            entity.health = entity.max_health
+
+        self.used = True
+        world.log_message(f"{entity.name} gained 20 health from potion")
+
+
+class PostionSystem(System):
+    def run(self, floor):
+        for i in floor.components["potion"]:
+            for entity in floor.components["entities"]:
+                if not i.used and i.x == entity.x and i.y == entity.y:
+                    i.activate(entity, floor.world)
+
+
+
 class EntitySystem(System):
     def run(self, floor):
-        for e in list(floor.components["entities"]):
+        for e in floor.components["entities"]:
             if e.ai and not e.dead:
                 e.ai.take_turn(floor)
 
-        floor.components["entities"] = [
-            e for e in floor.components["entities"] if not e.dead
-        ]
+        floor.components["entities"] = [ e for e in floor.components["entities"] if not e.dead and e.health > 0 ]
+
+
+class ArrowTrap:
+    def __init__(self, symbol, x, y, color, lifetime):
+        self.symbol = symbol
+        self.x = x
+        self.y = y
+        self.visable = True
+        self.color = color
+        self.lifetime = lifetime
+        self.direction = random.choice(["up","down","left","right"])
+
+    def tick(self):
+        self.lifetime -= 1
+
+
+class ArrowTrapSystem(System):
+    def run(self, floor):
+
+        for e in floor.components["arrowtrap"]:
+            match e.direction:
+                case "down":
+                    floor.move_tile(e, 0, 1)
+                case "up":
+                    floor.move_tile(e, 0, -1)
+                case "right":
+                    floor.move_tile(e, 1, 0)
+                case "left":
+                    floor.move_tile(e, -1, 0)
+
+            e.tick()
+
+        arrow_tiles = [(tile.x, tile.y) for tile in floor.components["arrowtrap"]]
+        for e in floor.components["entities"]:
+            if not e.dead:
+                if (e.x, e.y) in arrow_tiles:
+                    e.health -= 10
+                    floor.world.log_message( f"{e.name} got hit by an arrow for {10} damage!" )
+        
+        for e in floor.components["potion"]:
+            if not e.used:
+                if (e.x, e.y) in arrow_tiles:
+                    e.used =  True
+
+        floor.components["arrowtrap"] = [ e for e in floor.components["arrowtrap"] if e.lifetime > 0 ]
 
 
 class Floor:
     def __init__(self, world, grid_w, grid_h):
         self.grid = self.create_floor(grid_w, grid_h)
+
         self.world = world
+        self.components = {"entities": []}
 
-        self.components = {"entities": [], "items": []}
-
-        self.systems = [EntitySystem()]
+        self.systems = [EntitySystem(), ArrowTrapSystem(), PostionSystem()]
 
         # add some potions to the floor
         for _ in range(3):
-            self.add_component("items", Potion(0, 0, "Potion", "P", (140, 255, 200)))
+            self.add_component("potion", Potion(0, 0, "Potion", "P", (140, 255, 200)))
+
+        for _ in range(3):
+            self.add_component("arrowtrap", ArrowTrap("*", 0, 0, (123,123,123), 30))
 
     def create_floor(self, grid_w, grid_h):
         grid = [["#" for _ in range(grid_w)] for _ in range(grid_h)]
@@ -96,9 +145,9 @@ class Floor:
                     grid[y2][x] = "."
 
         ## add stairs < and >
-        stair_up_x, stair_up_y = find_valid_spawn(grid)
+        stair_up_x, stair_up_y = self.find_valid_spawn(grid)
         grid[stair_up_y][stair_up_x] = "<"
-        stair_down_x, stair_down_y = find_valid_spawn(grid)
+        stair_down_x, stair_down_y = self.find_valid_spawn(grid)
         grid[stair_down_y][stair_down_x] = ">"
 
         return grid
@@ -106,6 +155,18 @@ class Floor:
     def is_movable(self, x, y):
         return self.grid[y][x] != "#"
 
+    def move_tile(self, entity, x, y):
+        # check for walls and other stuff here
+        new_x = entity.x + x
+        new_y = entity.y + y
+
+        if not self.is_movable(new_x, new_y):
+            return
+
+        entity.x = new_x
+        entity.y = new_y
+
+    # kinda want this to be a system, but not sure how yet...
     def move_entity(self, entity, x, y):
         # check for walls and other stuff here
         new_x = entity.x + x
@@ -118,31 +179,21 @@ class Floor:
             if e is not entity and e.x == new_x and e.y == new_y:
                 # attack seq (entity then other: e)
                 e.health -= entity.attack
-                self.world.log_message(
-                    f"{entity.name} attacks {e.name} for {entity.attack}!"
-                )
+                self.world.log_message( f"{entity.name} attacks {e.name} for {entity.attack}!" )
                 if e.health <= 0:
                     self.world.log_message(f"{e.name} dies!")
                     e.dead = True
                     entity.experience += e.ex_gain
-                    self.world.log_message(
-                        f"{entity.name} gains {e.ex_gain} experience!"
-                    )
+                    self.world.log_message( f"{entity.name} gains {e.ex_gain} experience!" )
                     entity.score += e.ex_gain
                     if entity.experience >= entity.experience_to_level:
                         entity.level_up()
-                        self.world.log_message(
-                            f"{entity.name} levels up to level {entity.level}!"
-                        )
+                        self.world.log_message( f"{entity.name} levels up to level {entity.level}!" )
                         entity.score += 50
                     if entity.health <= 0:
                         self.world.log_message(f"{entity.name} dies!")
                         entity.dead = True
                 return
-
-        for i in self.components["items"]:
-            if not i.used and i.x == new_x and i.y == new_y:
-                i.use(entity, self.world)
 
         entity.x = new_x
         entity.y = new_y
@@ -151,45 +202,55 @@ class Floor:
         for system in self.systems:
             system.run(self)
 
+
     def add_system(self, system):
         self.systems.append(system)
 
+
     def add_component(self, component, value=None):
+        has_visual_tag = hasattr(value, "dead") or hasattr(value, "used") or hasattr(value, "visable")
+        assert has_visual_tag, "component doesnt have a visual tag"
         if component in self.components:
             if value:
                 if hasattr(value, "x") and hasattr(value, "y"):
-                    x, y = find_valid_spawn(self.grid)
+                    x, y = self.find_valid_spawn(self.grid)
                     value.x = x
                     value.y = y
                     self.components[component].append(value)
                 else:
                     self.components[component].append(value)
-
         else:
-            self.components[component] = []
+            if value:
+                if hasattr(value, "x") and hasattr(value, "y"):
+                    x, y = self.find_valid_spawn(self.grid)
+                    value.x = x
+                    value.y = y
+                    self.components[component] = [value]
+                else:
+                    self.components[component] = [value]
 
 
-def find_valid_spawn(grid):
-    height = len(grid)
-    width = len(grid[0])
-    while True:
-        x = random.randint(0, width - 1)
-        y = random.randint(0, height - 1)
-        if grid[y][x] == ".":
-            return (x, y)
-
-
-def find_up_stairs(grid):
-    for y in range(len(grid)):
-        for x in range(len(grid[y])):
-            if grid[y][x] == "<":
+    def find_valid_spawn(self, grid):
+        height = len(grid)
+        width = len(grid[0])
+        while True:
+            x = random.randint(0, width - 1)
+            y = random.randint(0, height - 1)
+            if grid[y][x] == ".":
                 return (x, y)
-    return None
 
 
-def find_down_stairs(grid):
-    for y in range(len(grid)):
-        for x in range(len(grid[y])):
-            if grid[y][x] == ">":
-                return (x, y)
-    return None
+    def find_up_stairs(self, grid):
+        for y in range(len(grid)):
+            for x in range(len(grid[y])):
+                if grid[y][x] == "<":
+                    return (x, y)
+        return None
+
+
+    def find_down_stairs(self, grid):
+        for y in range(len(grid)):
+            for x in range(len(grid[y])):
+                if grid[y][x] == ">":
+                    return (x, y)
+        return None

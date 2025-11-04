@@ -2,17 +2,21 @@ import pygame
 import sys
 import random
 
+
 from enum import Enum, auto
 from entities import Entity, create_random_mob 
 from floor import Floor 
 
+
 pygame.init()
+
 
 FONTSIZE = 32
 GRID_W = 40
 GRID_H = 20
 LOG_SIZE = 8
 TOP_BAR_SIZE = 2
+
 
 font = pygame.font.SysFont("Consolas", FONTSIZE)
 screen = pygame.display.set_mode( ( GRID_W * FONTSIZE, GRID_H * FONTSIZE + (LOG_SIZE * FONTSIZE) + (TOP_BAR_SIZE * FONTSIZE)) )
@@ -28,26 +32,19 @@ class State(Enum):
 class World:
     def __init__(self):
         self.state = State.OVERWORLD
-
         self.player = Entity("player", 5, 5, 100, 5, (0, 255, 0), "@")
-
         self.floors = [Floor(self, GRID_W, GRID_H)]
         self.current_floor = 0
         self.add_mobs(3)
-
         self.log = []
-
         self.map.add_component("entities", self.player)
 
     def reset(self):
         self.state = State.OVERWORLD
-
         self.player = Entity("player", 5, 5, 100, 5, (0, 255, 0), "@")
-
         self.floors = [Floor(self, GRID_W, GRID_H)]
         self.current_floor = 0
         self.add_mobs(3)
-
         self.log = []
         self.map.add_component("entities", self.player)
 
@@ -143,6 +140,8 @@ class World:
                 ny, nx = yy + dy, xx + dx
                 if 0 <= ny < height and 0 <= nx < width:
                     if self.map.grid[ny][nx] == ".":
+                        return True
+                    elif self.map.grid[ny][nx] == "<" or self.map.grid[ny][nx] == ">":
                         return True
             return False
 

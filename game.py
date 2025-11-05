@@ -3,8 +3,9 @@ import sys
 import random
 
 
+
 from enum import Enum, auto
-from entities import Entity, create_random_mob 
+from entities import Entity, create_random_mob, Weapon
 from floor import Floor 
 
 
@@ -14,8 +15,8 @@ pygame.init()
 FONTSIZE = 32
 GRID_W = 40
 GRID_H = 20
-LOG_SIZE = 8
-TOP_BAR_SIZE = 2
+LOG_SIZE = 9
+TOP_BAR_SIZE = 3
 
 
 font = pygame.font.SysFont("Consolas", FONTSIZE)
@@ -32,7 +33,7 @@ class State(Enum):
 class World:
     def __init__(self):
         self.state = State.OVERWORLD
-        self.player = Entity("player", 5, 5, 100, 5, (0, 255, 0), "@")
+        self.player = Entity("player", 5, 5, 100, 5, (0, 255, 0), "@", Weapon("Sword", 30, "!", 5, 10))
         self.floors = [Floor(self, GRID_W, GRID_H)]
         self.current_floor = 0
         self.add_mobs(3)
@@ -41,7 +42,7 @@ class World:
 
     def reset(self):
         self.state = State.OVERWORLD
-        self.player = Entity("player", 5, 5, 100, 5, (0, 255, 0), "@")
+        self.player = Entity("player", 5, 5, 100, 5, (0, 255, 0), "@", Weapon("Sword", 30, "!", 5, 10))
         self.floors = [Floor(self, GRID_W, GRID_H)]
         self.current_floor = 0
         self.add_mobs(3)
@@ -62,19 +63,15 @@ class World:
             new_floor = Floor(self, GRID_W, GRID_H)
             # fill with mobs
             for _ in range(random.randint(1, self.current_floor + 4)):
+
                 mob = create_random_mob()
                 x, y = new_floor.find_valid_spawn(new_floor.grid)
                 mob.x = x
                 mob.y = y
 
-                # make mobs harder on deeper floors
-                attack = mob.attack + self.current_floor
-                health = mob.max_health + self.current_floor
-
-                mob.attack = attack
-                mob.health = health
-                mob.max_health = health
-
+                for _ in range(random.randint(self.current_floor, self.current_floor + 3)):
+                    mob.level_up()
+                    
                 mob.set_ex(mob.ex_gain + self.current_floor * 2)
 
                 new_floor.add_component("entities", mob)
@@ -104,7 +101,7 @@ class World:
 
     def draw_overworld(self):
         color = (255, 255, 255)
-
+        under_player = []
         map_overlay = {}
         for overlay in self.map.components.values():
             for obj in overlay:
@@ -116,22 +113,34 @@ class World:
                     symbol = (obj.symbol, obj.color)
                     if pos not in map_overlay:
                         map_overlay[pos] = symbol
+                    elif map_overlay[pos][1] == "@":
+                        under_player.append(obj.name)
                     continue
                 elif hasattr(obj, "used") and not obj.used:
                     pos = (obj.y, obj.x)
                     symbol = (obj.symbol, obj.color)
                     if pos not in map_overlay:
                         map_overlay[pos] = symbol
+                    elif map_overlay[pos][1] == "@":
+                        under_player.append(obj.name)
                     continue
                 elif hasattr(obj, "visable") and obj.visable:
                     pos = (obj.y, obj.x)
                     symbol = (obj.symbol, obj.color)
                     if pos not in map_overlay:
                         map_overlay[pos] = symbol
+                    elif map_overlay[pos][1] == "@":
+                        under_player.append(obj.name)
                     continue
 
         height = len(self.map.grid)
         width = len(self.map.grid[0])
+        
+        if self.map.grid[self.player.y][self.player.x] == "<":
+            under_player.append("up stairs")
+
+        if self.map.grid[self.player.y][self.player.x] == ">":
+            under_player.append("down stairs")
 
         def wall_visible(yy, xx):
             if self.map.grid[yy][xx] != "#":
@@ -145,11 +154,16 @@ class World:
                         return True
             return False
 
-        top_bar_size_offset = (TOP_BAR_SIZE + 1) * FONTSIZE
-        text = font.render( f"Name: {self.player.name} LVL: {str(self.player.level)} HP: {str(self.player.health)}/{str(self.player.max_health)} EX: {str(self.player.experience)}/{str(self.player.experience_to_level)} Attack: {str(self.player.attack)}", True, color, )
-        screen.blit(text, (0, FONTSIZE))
+        top_bar_size_offset = (TOP_BAR_SIZE) * FONTSIZE
+        text = font.render( f"Name: {self.player.name} LVL: {str(self.player.level)} HP: {str(self.player.health)}/{str(self.player.max_health)} EX: {str(self.player.experience)}/{str(self.player.experience_to_level)} Damage: {str( self.player.weapon.min_damage + self.player.strength if self.player.weapon else 0)} - {str(self.player.weapon.max_damage + self.player.strength if self.player.weapon  else self.player.strength)}", True, color, )
+        screen.blit(text, (0, 0))
         text = font.render( f"Floor: {self.current_floor} Score: {str(self.player.score)} | Press ? for help", True, color, )
-        screen.blit(text, (0, FONTSIZE * 2))
+        screen.blit(text, (0, FONTSIZE ))
+        things_under_player = " ".join([item for item in under_player])
+
+        if things_under_player:
+            text = font.render( things_under_player, True, color, )
+            screen.blit(text, (0, FONTSIZE * 2))
 
         for y, row in enumerate(self.map.grid):
             for x, ch in enumerate(row):
@@ -178,10 +192,12 @@ class World:
                     screen.blit( text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset) )
 
         # draw log
-        log_start_y = GRID_H * FONTSIZE
+        log_start_y = GRID_H * FONTSIZE + top_bar_size_offset
         for i, log_entry in enumerate(self.log[-LOG_SIZE:]):
             text = font.render(log_entry, True, color)
-            screen.blit(text, (0, log_start_y + i * FONTSIZE + top_bar_size_offset))
+            screen.blit(text, (0, log_start_y + i * FONTSIZE))
+
+        
 
     def draw_gameover(self):
         # print dead screen

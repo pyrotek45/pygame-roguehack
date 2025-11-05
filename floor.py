@@ -1,5 +1,5 @@
 import random
-
+from entities import Entity, WonderAi
 
 class System:
     def __init__(self):
@@ -11,10 +11,10 @@ class System:
 
 class Potion:
     def __init__(self, x, y, name, symbol, color):
+        self.name = name
         self.x = x
         self.y = y
         self.symbol = symbol
-        self.name = name
         self.color = color
         self.used = False
 
@@ -40,13 +40,29 @@ class EntitySystem(System):
     def run(self, floor):
         for e in floor.components["entities"]:
             if e.ai and not e.dead:
-                e.ai.take_turn(floor)
+                if e.name == "amoeba":
+                    if random.random() > 0.03:
+                        e.ai.take_turn(floor)
+                    else:
+                        directions = [ (1, 0), (-1, 0), (0, 1), (0, -1), ]
+                        open_tiles = [dir for dir in directions if floor.grid[e.y + dir[0]][e.x + dir[1]] == "."]
+                        if open_tiles:
+                            mob = Entity("amoeba", 0, 0, 3, 1, "a", (55, 120, 50), ai=WonderAi(None))
+                            floor.add_component("entities", mob)
+                            open_tile = random.choice(open_tiles)
+                            mob.original = False
+                            mob.x = e.x + open_tile[1]
+                            mob.y = e.y + open_tile[0]
+                            floor.world.log_message("amoeba has replicated")
+                else:
+                    e.ai.take_turn(floor)
 
         floor.components["entities"] = [ e for e in floor.components["entities"] if not e.dead and e.health > 0 ]
 
 
 class ArrowTrap:
     def __init__(self, symbol, x, y, color, lifetime):
+        self.name = "arrow trap"
         self.symbol = symbol
         self.x = x
         self.y = y
@@ -110,9 +126,9 @@ class Floor:
         grid = [["#" for _ in range(grid_w)] for _ in range(grid_h)]
         rooms = []
 
-        room_count = random.randint(5, 10)
-        room_min_size = 5
-        room_max_size = 10
+        room_count = random.randint(7, 20)
+        room_min_size = 3
+        room_max_size = 5
 
         for _ in range(room_count):
             w = random.randint(room_min_size, room_max_size)
@@ -177,9 +193,15 @@ class Floor:
 
         for e in self.components["entities"]:
             if e is not entity and e.x == new_x and e.y == new_y:
+
                 # attack seq (entity then other: e)
-                e.health -= entity.attack
-                self.world.log_message( f"{entity.name} attacks {e.name} for {entity.attack}!" )
+                # basic attack stuff
+                damage = random.randint(1,entity.strength)
+                if entity.weapon:
+                    damage = random.randint(entity.weapon.min_damage + entity.strength, entity.weapon.max_damage + entity.strength)
+                e.health -= damage
+
+                self.world.log_message( f"{entity.name} attacks {e.name} for {damage}!" )
                 if e.health <= 0:
                     self.world.log_message(f"{e.name} dies!")
                     e.dead = True

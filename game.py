@@ -39,6 +39,11 @@ class World:
         self.add_mobs(3)
         self.log = []
         self.map.add_component("entities", self.player)
+        
+        # Fog of war system
+        self.visible_tiles = set()  # Tiles currently visible
+        self.seen_tiles = set()  # Tiles that have ever been seen
+        self.vision_radius = 8  # Vision range
 
     def reset(self):
         self.state = State.OVERWORLD
@@ -48,6 +53,10 @@ class World:
         self.add_mobs(3)
         self.log = []
         self.map.add_component("entities", self.player)
+        
+        # Reset fog of war
+        self.visible_tiles = set()
+        self.seen_tiles = set()
 
     def add_mobs(self, num):
         for _ in range(num):
@@ -82,10 +91,16 @@ class World:
 
         self.current_floor += 1
         self.player.x, self.player.y = self.map.find_up_stairs(self.map.grid)
+        # Reset fog of war for new floor
+        self.visible_tiles = set()
+        self.seen_tiles = set()
 
     def go_up_stairs(self):
         self.current_floor -= 1
         self.player.x, self.player.y = self.map.find_down_stairs(self.map.grid)
+        # Reset fog of war for new floor
+        self.visible_tiles = set()
+        self.seen_tiles = set()
 
     # log can only show 8, so perhaps list needs to erase non visable ones, otherwise
     # list could grow and waste memory. unless there is a log history feature at some point?
@@ -94,8 +109,68 @@ class World:
         while len(self.log) > 9:
             self.log.pop(0)
 
+    def calculate_fov(self):
+        """Calculate field of view using raycasting - walls block vision"""
+        self.visible_tiles = set()
+        px, py = self.player.x, self.player.y
+        
+        # Add player position as visible (note: using (y, x) format for consistency)
+        self.visible_tiles.add((py, px))
+        self.seen_tiles.add((py, px))
+        
+        # Cast rays to all tiles within vision radius
+        for dx in range(-self.vision_radius, self.vision_radius + 1):
+            for dy in range(-self.vision_radius, self.vision_radius + 1):
+                distance = (dx * dx + dy * dy) ** 0.5
+                if distance > self.vision_radius:
+                    continue
+                
+                # Cast ray from player to this tile using Bresenham-like algorithm
+                target_x = px + dx
+                target_y = py + dy
+                
+                # Check bounds
+                if target_x < 0 or target_x >= GRID_W or target_y < 0 or target_y >= GRID_H:
+                    continue
+                
+                # Cast ray
+                x0, y0 = px, py
+                x1, y1 = target_x, target_y
+                
+                # Use integer-based line drawing
+                steps = max(abs(x1 - x0), abs(y1 - y0))
+                
+                if steps == 0:
+                    self.visible_tiles.add((y0, x0))  # (y, x) format
+                    self.seen_tiles.add((y0, x0))
+                    continue
+                
+                for step in range(steps + 1):
+                    if steps > 0:
+                        t = step / steps
+                        x = int(x0 + (x1 - x0) * t)
+                        y = int(y0 + (y1 - y0) * t)
+                    else:
+                        x, y = x0, y0
+                    
+                    # Check bounds
+                    if x < 0 or x >= GRID_W or y < 0 or y >= GRID_H:
+                        break
+                    
+                    # Add to visible tiles (before checking if wall) - using (y, x) format
+                    self.visible_tiles.add((y, x))
+                    self.seen_tiles.add((y, x))
+                    
+                    # Check if wall blocks vision (stop here, can't see beyond)
+                    if self.map.grid[y][x] == "#":
+                        break
+
     def update(self):
         self.map.update()
+        
+        # Calculate field of view
+        self.calculate_fov()
+        
         if self.player.health <= 0:
             self.state = State.GAMEOVER
 
@@ -103,13 +178,20 @@ class World:
         color = (255, 255, 255)
         under_player = []
         map_overlay = {}
-        for overlay in self.map.components.values():
+        
+        # First pass: collect all overlay items (only visible ones)
+        for overlay_name, overlay in self.map.components.items():
             for obj in overlay:
+                pos = (obj.y, obj.x)
+                
+                # Only add to overlay if visible
+                if pos not in self.visible_tiles:
+                    continue
+                
                 # this kind of sucks. all items need some sort of visablity
                 # attribute but whatever ig. when adding something to the
                 # components use one of these attributes. 
                 if hasattr(obj, "dead") and not obj.dead:
-                    pos = (obj.y, obj.x)
                     symbol = (obj.symbol, obj.color)
                     if pos not in map_overlay:
                         map_overlay[pos] = symbol
@@ -117,7 +199,6 @@ class World:
                         under_player.append(obj.name)
                     continue
                 elif hasattr(obj, "used") and not obj.used:
-                    pos = (obj.y, obj.x)
                     symbol = (obj.symbol, obj.color)
                     if pos not in map_overlay:
                         map_overlay[pos] = symbol
@@ -125,7 +206,6 @@ class World:
                         under_player.append(obj.name)
                     continue
                 elif hasattr(obj, "visable") and obj.visable:
-                    pos = (obj.y, obj.x)
                     symbol = (obj.symbol, obj.color)
                     if pos not in map_overlay:
                         map_overlay[pos] = symbol
@@ -145,12 +225,11 @@ class World:
         def wall_visible(yy, xx):
             if self.map.grid[yy][xx] != "#":
                 return False
+            # Wall is visible if adjacent to a seen floor tile
             for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 ny, nx = yy + dy, xx + dx
                 if 0 <= ny < height and 0 <= nx < width:
-                    if self.map.grid[ny][nx] == ".":
-                        return True
-                    elif self.map.grid[ny][nx] == "<" or self.map.grid[ny][nx] == ">":
+                    if (ny, nx) in self.seen_tiles and self.map.grid[ny][nx] == ".":
                         return True
             return False
 
@@ -167,28 +246,46 @@ class World:
 
         for y, row in enumerate(self.map.grid):
             for x, ch in enumerate(row):
-                if (y, x) in map_overlay:
-                    if map_overlay[(y, x)][1] == "@":
+                pos = (y, x)
+                is_visible = pos in self.visible_tiles
+                is_seen = pos in self.seen_tiles
+                
+                # If not seen at all, show black
+                if not is_seen:
+                    text = font.render(" ", True, (0, 0, 0))
+                    screen.blit(text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset))
+                    continue
+                
+                # If seen but not visible, show dimmed (fog of war)
+                dimmed_color = (80, 80, 80)  # Dark gray for fog of war
+                
+                if pos in map_overlay:
+                    if map_overlay[pos][1] == "@":
+                        # Player is always visible
                         text = font.render("@", True, (0, 255, 0))
                         screen.blit( text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset) )
                     else:
-                        text = font.render( str(map_overlay[(y, x)][0]), True, map_overlay[(y, x)][1] )
+                        symbol_color = map_overlay[pos][1] if is_visible else dimmed_color
+                        text = font.render( str(map_overlay[pos][0]), True, symbol_color )
                         screen.blit( text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset) )
                 else:
+                    render_color = color if is_visible else dimmed_color
                     if ch == "#":
                         if wall_visible(y, x):
-                            text = font.render("#", True, color)
+                            text = font.render("#", True, render_color)
                         else:
-                            text = font.render(" ", True, color)
+                            text = font.render(" ", True, (0, 0, 0))
                     elif ch == "<":
                         if world.current_floor == 0:
-                            text = font.render(".", True, color)
+                            text = font.render(".", True, render_color)
                         elif world.current_floor >= 1:
-                            text = font.render("<", True, (255, 215, 0))
+                            stair_color = (255, 215, 0) if is_visible else dimmed_color
+                            text = font.render("<", True, stair_color)
                     elif ch == ">":
-                        text = font.render(">", True, (255, 215, 0))
+                        stair_color = (255, 215, 0) if is_visible else dimmed_color
+                        text = font.render(">", True, stair_color)
                     else:
-                        text = font.render(ch, True, color)
+                        text = font.render(ch, True, render_color)
                     screen.blit( text, (x * FONTSIZE, y * FONTSIZE + top_bar_size_offset) )
 
         # draw log

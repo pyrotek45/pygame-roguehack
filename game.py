@@ -42,8 +42,10 @@ class World:
         
         # Fog of war system
         self.visible_tiles = set()  # Tiles currently visible
-        self.seen_tiles = set()  # Tiles that have ever been seen
+        self.seen_tiles = set()  # Tiles that have ever been seen on current floor
         self.vision_radius = 8  # Vision range
+        self.floor_seen_tiles = {self.current_floor: self.seen_tiles}
+        self.calculate_fov()
 
     def reset(self):
         self.state = State.OVERWORLD
@@ -57,6 +59,8 @@ class World:
         # Reset fog of war
         self.visible_tiles = set()
         self.seen_tiles = set()
+        self.floor_seen_tiles = {self.current_floor: self.seen_tiles}
+        self.calculate_fov()
 
     def add_mobs(self, num):
         for _ in range(num):
@@ -68,6 +72,9 @@ class World:
         return self.floors[self.current_floor]
 
     def go_down_stairs(self):
+        # Store explored tiles for the current floor before leaving
+        self.floor_seen_tiles[self.current_floor] = self.seen_tiles
+
         if self.current_floor == len(self.floors) - 1:
             new_floor = Floor(self, GRID_W, GRID_H)
             # fill with mobs
@@ -93,14 +100,21 @@ class World:
         self.player.x, self.player.y = self.map.find_up_stairs(self.map.grid)
         # Reset fog of war for new floor
         self.visible_tiles = set()
-        self.seen_tiles = set()
+        self.seen_tiles = self.floor_seen_tiles.setdefault(self.current_floor, set())
+        self.floor_seen_tiles[self.current_floor] = self.seen_tiles
+        self.calculate_fov()
 
     def go_up_stairs(self):
+        # Store explored tiles for the current floor before leaving
+        self.floor_seen_tiles[self.current_floor] = self.seen_tiles
+
         self.current_floor -= 1
         self.player.x, self.player.y = self.map.find_down_stairs(self.map.grid)
         # Reset fog of war for new floor
         self.visible_tiles = set()
-        self.seen_tiles = set()
+        self.seen_tiles = self.floor_seen_tiles.setdefault(self.current_floor, set())
+        self.floor_seen_tiles[self.current_floor] = self.seen_tiles
+        self.calculate_fov()
 
     # log can only show 8, so perhaps list needs to erase non visable ones, otherwise
     # list could grow and waste memory. unless there is a log history feature at some point?
